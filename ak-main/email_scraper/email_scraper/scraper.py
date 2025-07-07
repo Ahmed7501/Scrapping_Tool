@@ -51,10 +51,9 @@ class EmailScraper:
         unique_emails = []
         for email in emails:
             email = email.lower().strip()
-            # More specific filtering to avoid false positives
+            # Less restrictive filtering - only filter out obvious false positives
             if (email and 
                 not email.startswith('example@') and 
-                not email.startswith('test@') and
                 not email.startswith('noreply@') and
                 not email.startswith('no-reply@') and
                 not email.startswith('donotreply@') and
