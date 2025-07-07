@@ -1,0 +1,12 @@
+beautifulsoup4
+requests
+pandas
+tqdm
+python-dotenv
+streamlit
+openpyxl
+python-docx
+xlrd
+aiohttp
+asyncio
+aiofiles
