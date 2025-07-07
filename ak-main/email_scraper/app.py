@@ -162,8 +162,9 @@ if uploaded_file:
                     total_emails = 0
                     urls_with_emails = 0
                     for _, row in df.iterrows():
-                        if row['emails'] and row['emails'] != '':
-                            email_count = len(row['emails'].split(','))
+                        emails_str = str(row['emails']).strip()
+                        if emails_str and emails_str != '' and emails_str != 'nan':
+                            email_count = len(emails_str.split(','))
                             total_emails += email_count
                             urls_with_emails += 1
                     
