@@ -150,13 +150,64 @@ if uploaded_file:
                             mime="text/csv"
                         )
                     
-                    # Show statistics
-                    st.write("### Statistics")
-                    total_emails = df['emails'].str.count(',').fillna(0).astype(int) + (df['emails'] != '').astype(int)
-                    st.write(f"Total URLs processed: {len(df)}")
-                    st.write(f"Total emails found: {total_emails.sum()}")
-                    st.write(f"URLs with emails: {len(df[df['emails'] != ''])}")
-                    st.write(f"Average time per URL: {time_taken/len(df):.2f} seconds")
+                    # Show enhanced statistics
+                    st.write("### 📊 Detailed Statistics")
+                    
+                    # Calculate statistics
+                    total_urls = len(df)
+                    successful_scrapes = len(df[df['status'] == 'success'])
+                    failed_scrapes = total_urls - successful_scrapes
+                    
+                    # Count total emails
+                    total_emails = 0
+                    urls_with_emails = 0
+                    for _, row in df.iterrows():
+                        if row['emails'] and row['emails'] != '':
+                            email_count = len(row['emails'].split(','))
+                            total_emails += email_count
+                            urls_with_emails += 1
+                    
+                    # Display statistics in columns
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Total URLs", total_urls)
+                    
+                    with col2:
+                        st.metric("Successful Scrapes", successful_scrapes)
+                    
+                    with col3:
+                        st.metric("Total Emails Found", total_emails)
+                    
+                    with col4:
+                        st.metric("URLs with Emails", urls_with_emails)
+                    
+                    # Show success rate
+                    if total_urls > 0:
+                        success_rate = (successful_scrapes / total_urls) * 100
+                        st.info(f"Success Rate: {success_rate:.1f}%")
+                    
+                    # Show average emails per URL
+                    if urls_with_emails > 0:
+                        avg_emails = total_emails / urls_with_emails
+                        st.info(f"Average emails per URL (with emails): {avg_emails:.1f}")
+                    
+                    # Show failed URLs if any
+                    if failed_scrapes > 0:
+                        with st.expander("Failed URLs"):
+                            failed_df = df[df['status'] != 'success']
+                            st.dataframe(failed_df[['url', 'status']])
+                    
+                    # Show top domains with most emails
+                    if total_emails > 0:
+                        with st.expander("Top Domains by Email Count"):
+                            domain_stats = df.groupby('domain').agg({
+                                'email_count': 'sum',
+                                'url': 'count'
+                            }).reset_index()
+                            domain_stats.columns = ['Domain', 'Total Emails', 'URLs Scraped']
+                            domain_stats = domain_stats.sort_values('Total Emails', ascending=False)
+                            st.dataframe(domain_stats.head(10))
                 
                 # Cleanup temporary files
                 os.remove(tmp_path)
