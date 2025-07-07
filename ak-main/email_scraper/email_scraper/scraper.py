@@ -29,8 +29,8 @@ class EmailScraper:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        # Enhanced email pattern to catch more email formats
-        self.email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        # Enhanced email pattern to catch more email formats but avoid false positives
+        self.email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
         self.session: Optional[aiohttp.ClientSession] = None
 
     async def init_session(self):
@@ -51,53 +51,71 @@ class EmailScraper:
         unique_emails = []
         for email in emails:
             email = email.lower().strip()
-            # Filter out common false positives
+            # More specific filtering to avoid false positives
             if (email and 
-                not email.startswith('example') and 
-                not email.startswith('test') and
-                not email.startswith('admin') and
-                not email.startswith('noreply') and
-                not email.startswith('no-reply') and
-                not email.startswith('donotreply') and
+                not email.startswith('example@') and 
+                not email.startswith('test@') and
+                not email.startswith('noreply@') and
+                not email.startswith('no-reply@') and
+                not email.startswith('donotreply@') and
                 not email.startswith('mailto:') and
-                len(email) > 5):
+                not email.endswith('.png') and
+                not email.endswith('.jpg') and
+                not email.endswith('.jpeg') and
+                not email.endswith('.gif') and
+                not email.endswith('.svg') and
+                not email.endswith('.ico') and
+                not email.endswith('.webp') and
+                len(email) > 5 and
+                '@' in email and
+                '.' in email.split('@')[1] and  # Ensure domain has a TLD
+                len(email.split('@')[1].split('.')[0]) > 0):  # Ensure domain name exists
                 unique_emails.append(email)
+        
+        # Log found emails for debugging
+        if unique_emails:
+            logging.info(f"Found emails: {unique_emails}")
+        
         return list(set(unique_emails))
 
     def extract_emails_from_html(self, soup: BeautifulSoup) -> Set[str]:
         """Extract emails from HTML attributes and content."""
         emails = set()
         
-        # Extract from href attributes (mailto links)
-        mailto_links = soup.find_all('a', href=re.compile(r'mailto:', re.IGNORECASE))
-        for link in mailto_links:
-            href = link.get('href', '')
-            if href.startswith('mailto:'):
-                email = href.replace('mailto:', '').split('?')[0].split('#')[0]
-                if email and '@' in email:
-                    emails.add(email.lower().strip())
-        
-        # Extract from data attributes
-        for tag in soup.find_all(attrs=re.compile(r'data-.*')):
-            for attr_name, attr_value in tag.attrs.items():
-                if isinstance(attr_value, str) and '@' in attr_value:
-                    found_emails = self.extract_emails(attr_value)
+        try:
+            # Extract from href attributes (mailto links)
+            mailto_links = soup.find_all('a', href=True)
+            for link in mailto_links:
+                href = link.get('href', '')
+                if href and href.startswith('mailto:'):
+                    email = href.replace('mailto:', '').split('?')[0].split('#')[0]
+                    if email and '@' in email:
+                        emails.add(email.lower().strip())
+            
+            # Extract from all attributes that might contain emails
+            for tag in soup.find_all():
+                for attr_name, attr_value in tag.attrs.items():
+                    if isinstance(attr_value, str) and '@' in attr_value:
+                        found_emails = self.extract_emails(attr_value)
+                        emails.update(found_emails)
+            
+            # Extract from script tags (JavaScript)
+            scripts = soup.find_all('script')
+            for script in scripts:
+                if script.string:
+                    found_emails = self.extract_emails(script.string)
                     emails.update(found_emails)
-        
-        # Extract from script tags (JavaScript)
-        scripts = soup.find_all('script')
-        for script in scripts:
-            if script.string:
-                found_emails = self.extract_emails(script.string)
-                emails.update(found_emails)
-        
-        # Extract from meta tags
-        meta_tags = soup.find_all('meta')
-        for meta in meta_tags:
-            content = meta.get('content', '')
-            if content and '@' in content:
-                found_emails = self.extract_emails(content)
-                emails.update(found_emails)
+            
+            # Extract from meta tags
+            meta_tags = soup.find_all('meta')
+            for meta in meta_tags:
+                content = meta.get('content', '')
+                if content and '@' in content:
+                    found_emails = self.extract_emails(content)
+                    emails.update(found_emails)
+                    
+        except Exception as e:
+            logging.error(f"Error extracting emails from HTML: {e}")
         
         return emails
 
@@ -137,7 +155,13 @@ class EmailScraper:
                     # Get domain name
                     domain = self.get_domain_name(url)
                     
-                    logging.info(f"Found {len(all_emails)} emails from {url}")
+                    # Debug logging
+                    logging.info(f"URL: {url}")
+                    logging.info(f"Text emails found: {len(text_emails)}")
+                    logging.info(f"HTML emails found: {len(html_emails)}")
+                    logging.info(f"Total emails found: {len(all_emails)}")
+                    if all_emails:
+                        logging.info(f"Email list: {all_emails}")
                     
                     return {
                         'url': url,
